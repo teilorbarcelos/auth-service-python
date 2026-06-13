@@ -107,6 +107,7 @@ class TestBaseService:
         assert convert_value("-10") == -10
         assert convert_value("10.5") == 10.5
         assert convert_value("true") is True
+        assert convert_value("false") is False
         assert convert_value("hello") == "hello"
 
     async def test_parse_date_value_invalid_date(self):

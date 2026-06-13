@@ -302,6 +302,29 @@ class TestAuthService:
         result = await service.logout_all(token)
         assert result["message"] == messages.ALL_SESSIONS_REVOKED
 
+    async def test_should_logout_user(self, service, mocker):
+        from src.infra.redis.redis_provider import redis_provider
+        from unittest.mock import AsyncMock
+
+        mock_inv_sess = mocker.patch.object(redis_provider, "invalidate_sessions", new_callable=AsyncMock)
+        mock_inv_perm = mocker.patch.object(redis_provider, "invalidate_permissions", new_callable=AsyncMock)
+
+        result = await service.logout_user("user-123")
+        assert result["message"] == messages.LOGGED_OUT_SUCCESSFULLY
+        mock_inv_sess.assert_called_once_with("user-123")
+        mock_inv_perm.assert_called_once_with("user-123")
+
+    async def test_should_fail_validate_password_reset_no_stored_hash(self, service, session):
+        session.add(Role(id="admin", name="Admin", description="D", active=True))
+        auth = Auth(id="a_no_hash", password="p", active=True)
+        user = User(id="u_no_hash", email="no-hash@test.com", name="N", id_role="admin", id_auth="a_no_hash")
+        session.add_all([auth, user])
+        await session.commit()
+
+        with pytest.raises(HTTPException) as exc:
+            await service.validate_password_reset_token("no-hash@test.com", "token")
+        assert exc.value.status_code == 401
+
     async def test_should_handle_logout_with_invalid_token(self, service, mocker):
         from src.infra.auth.auth_provider import auth_provider
 

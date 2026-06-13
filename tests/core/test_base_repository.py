@@ -300,4 +300,22 @@ class TestBaseRepository:
         result = await repo.exists_by_id(["e_no_sess"])
         assert "e_no_sess" in result["exists"]
 
+    async def test_should_find_one_by_query_without_session(self, repo, session):
+        role = Role(id="ns_find", name="NoSessionFind", description="D")
+        session.add(role)
+        await session.commit()
+
+        result = await repo.find_one_by_query({"name": "NoSessionFind"})
+        assert result["id"] == "ns_find"
+
+    async def test_should_search_paginated_without_session(self, repo, session):
+        session.add_all([
+            Role(id="ns_pag1", name="Pag1", description="D"),
+            Role(id="ns_pag2", name="Pag2", description="D"),
+        ])
+        await session.commit()
+
+        result = await repo.search_paginated(pageable={"page": 0, "size": 10})
+        assert len(result["items"]) == 2
+
 

@@ -144,6 +144,16 @@ class TestAuthEndpoints:
             assert response.status_code == 200
             mock_logout_all.assert_called_once_with("test-token")
 
+    async def test_should_return_jwks_endpoint(self, client: AsyncClient):
+        response = await client.get("/v1/auth/.well-known/jwks.json")
+        assert response.status_code == 200
+        assert response.json() == {"keys": []}
+
+    async def test_should_return_401_logout_without_authorization(self, client: AsyncClient, admin_user_override):
+        response = await client.post("/v1/auth/logout")
+        assert response.status_code == 401
+        assert response.json()["message"] == messages.INVALID_OR_EXPIRED_TOKEN
+
     async def test_should_return_user_info_for_valid_token(self, client: AsyncClient, admin_user_override):
         from src.modules.auth.auth_service import auth_service
 
