@@ -6,6 +6,13 @@ from src.shared.config.settings import settings
 from unittest.mock import patch, MagicMock
 
 
+def _make_result(stdout: str) -> MagicMock:
+    m = MagicMock()
+    m.stdout = stdout
+    m.returncode = 0
+    return m
+
+
 @pytest.mark.asyncio
 class TestBootstrapUtility:
     async def test_should_populate_features_and_roles(self, session):
@@ -44,10 +51,22 @@ class TestBootstrapUtility:
         with patch("subprocess.run") as mock_run:
             mock_run.side_effect = Exception("Migration Failed")
             await run_migrations()
-            mock_run.assert_called_once()
+            assert mock_run.call_count >= 1
 
     async def test_run_migrations_success(self):
         with patch("subprocess.run") as mock_run:
-            mock_run.return_value = MagicMock()
+            mock_run.return_value = _make_result("923509e24aee")
             await run_migrations()
-            mock_run.assert_called_once()
+            assert mock_run.call_count == 2
+
+    async def test_run_migrations_skips_when_backend_revision(self):
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = _make_result("a1b2c3d4e5f6")
+            await run_migrations()
+            assert mock_run.call_count == 1
+
+    async def test_run_migrations_stamps_unknown_revision(self):
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = _make_result("some_other_rev")
+            await run_migrations()
+            assert mock_run.call_count == 3
