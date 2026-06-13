@@ -25,38 +25,14 @@
       "command": "make coverage"
     },
     {
-      "name": "Start Metrics (Grafana & Prometheus)",
-      "command": "make metrics-up"
-    },
-    {
-      "name": "Stop Metrics",
-      "command": "make metrics-stop"
-    },
-    {
-      "name": "Down Metrics (Remove Containers)",
-      "command": "make metrics-down"
-    },
-    {
-      "name": "Generate Module",
-      "command": "make generate"
-    },
-    {
-      "name": "Install Storage: AWS S3",
-      "command": "make storage-driver name=s3"
-    },
-    {
-      "name": "Install Storage: Google Cloud (GCS)",
-      "command": "make storage-driver name=gcs"
-    },
-    {
-      "name": "Install Storage: Azure Blob",
-      "command": "make storage-driver name=azure"
+      "name": "Run SonarQube Scan",
+      "command": "make sonar"
     }
   ],
   "replacements": [
     {
-      "path": "requirements.txt",
-      "pattern": "backend-python"
+      "path": "pyproject.toml",
+      "pattern": "auth-service-python"
     }
   ]
 }

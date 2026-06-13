@@ -1,7 +1,7 @@
 [project]
-name = "backend-python"
+name = "auth-service-python"
 version = "1.0.0"
-description = "FastAPI backend boilerplate"
+description = "Auth Service Python FastAPI"
 requires-python = ">=3.12"
 
 [tool.ruff]
