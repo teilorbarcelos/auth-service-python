@@ -24,6 +24,12 @@ class Settings(BaseSettings):
 
     bootstrap_auth: bool = Field(default=True, alias="BOOTSTRAP_AUTH")
 
+    db_pool_size: int = Field(default=10, alias="DB_POOL_SIZE")
+    db_max_overflow: int = Field(default=20, alias="DB_MAX_OVERFLOW")
+    db_pool_timeout: int = Field(default=30, alias="DB_POOL_TIMEOUT")
+    db_pool_recycle: int = Field(default=3600, alias="DB_POOL_RECYCLE")
+    db_pool_pre_ping: bool = Field(default=True, alias="DB_POOL_PRE_PING")
+
     @field_validator("jwt_secret")
     @classmethod
     def validate_jwt_secret(cls, v: str, info):

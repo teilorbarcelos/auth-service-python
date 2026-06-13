@@ -2,7 +2,7 @@ import pytest
 import pytest_asyncio
 import uuid
 from src.core.base_repository import BaseRepository
-from src.infra.database.models import Role, User, Product, Feature, RoleFeature
+from src.infra.database.models import Role, User, Feature, RoleFeature
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete, Table, Column, String, MetaData
 from unittest.mock import patch, MagicMock, AsyncMock
@@ -217,23 +217,6 @@ class TestBaseRepository:
         assert "auth" in d
         assert d["auth"] is None
 
-    async def test_apply_filters_comparison_operators(self, session):
-        filters = {
-            "andRules": [
-                {"key": "price", "search": 10.0, "qt": "gte"},
-                {"key": "price", "search": 100.0, "qt": "lte"},
-                {"key": "price", "search": 5.0, "qt": "gt"},
-                {"key": "price", "search": 200.0, "qt": "lt"},
-            ]
-        }
-        stmt = select(Product)
-        stmt = apply_filters(Product, stmt, filters)
-        session.add(Product(id="p1", name="P1", sku="S1", category="C", price=50.0, stock=10, description="D"))
-        await session.commit()
-        result = await session.execute(stmt)
-        items = result.scalars().all()
-        assert len(items) == 1
-
     async def test_base_repository_edge_cases(self, session):
         metadata = MetaData()
         mock_table = Table("mock", metadata, Column("id", String, primary_key=True))
@@ -317,31 +300,4 @@ class TestBaseRepository:
         result = await repo.exists_by_id(["e_no_sess"])
         assert "e_no_sess" in result["exists"]
 
-    async def test_apply_filters_comparison_operators_extended(self, session):
-        filters = {
-            "andRules": [
-                {"key": "price", "search": 10.0, "qt": "gte"},
-                {"key": "price", "search": 100.0, "qt": "lte"},
-                {"key": "price", "search": 5.0, "qt": "gt"},
-                {"key": "price", "search": 200.0, "qt": "lt"},
-            ]
-        }
-        stmt = select(Product)
-        stmt = apply_filters(Product, stmt, filters)
-        session.add(Product(id="p_ext_1", name="P1", sku="S_EXT_1", category="C", price=50.0, stock=10, description="D"))
-        await session.commit()
-        result = await session.execute(stmt)
-        items = result.scalars().all()
-        assert len(items) >= 1
 
-    async def test_apply_filters_or_rules_equals_extended(self, session):
-        filters = {
-            "orRules": [{"key": "name", "search": "P_EXT_OR", "qt": "equals"}, {"key": "sku", "search": "S_EXT_OR", "qt": "contains"}]
-        }
-        stmt = select(Product)
-        stmt = apply_filters(Product, stmt, filters)
-        session.add(Product(id="p_ext_or", name="P_EXT_OR", sku="S_EXT_OR", category="C", price=50.0, stock=10, description="D"))
-        await session.commit()
-        result = await session.execute(stmt)
-        items = result.scalars().all()
-        assert len(items) >= 1

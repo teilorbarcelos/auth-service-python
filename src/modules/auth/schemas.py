@@ -61,3 +61,12 @@ class TokenValidationResponse(BaseModel):
 
 class MessageResponse(BaseModel):
     message: str
+
+
+class PasswordRequestResponse(BaseModel):
+    message: str
+    token: str
+
+
+class JWKSResponse(BaseModel):
+    keys: list

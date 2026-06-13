@@ -55,6 +55,8 @@ app.add_middleware(
 )
 
 if settings.environment == "production":
+    from fastapi.middleware.trustedhost import TrustedHostMiddleware
+
     app.add_middleware(
         TrustedHostMiddleware,
         allowed_hosts=[h.strip() for h in settings.cors_allowed_origins.split(",") if h.strip()],
@@ -88,18 +90,6 @@ app.include_router(health_router)
 app.add_exception_handler(RequestValidationError, validation_exception_handler)
 app.add_exception_handler(HTTPException, http_exception_handler)
 app.add_exception_handler(Exception, global_exception_handler)
-
-@app.get("/health")
-async def health_check_alias(response: Response):
-    from src.modules.health.router import health_check
-
-    return await health_check(response)
-
-
-@app.get("/liveness")
-async def liveness_check():
-    return {"status": "ok"}
-
 
 import logging
 

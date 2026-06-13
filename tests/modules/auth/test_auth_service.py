@@ -54,7 +54,7 @@ class TestAuthService:
 
         with pytest.raises(HTTPException) as exc:
             await service.login("inactive@test.com", "p")
-        assert "disabled" in exc.value.detail
+        assert exc.value.status_code == 401
 
     async def test_should_fail_if_account_locked(self, service, session):
         session.add(Role(id="admin", name="Admin", description="D", active=True))
@@ -66,7 +66,6 @@ class TestAuthService:
         with pytest.raises(HTTPException) as exc:
             await service.login("locked@test.com", "any")
         assert exc.value.status_code == 401
-        assert "locked" in exc.value.detail
 
     async def test_should_get_me_successfully(self, service, session):
         session.add(Role(id="admin", name="Admin", description="D", active=True))
@@ -92,7 +91,8 @@ class TestAuthService:
         await session.commit()
 
         mocker.patch("secrets.token_urlsafe", return_value="known-plaintext-token")
-        await service.request_password_reset("reset@test.com")
+        result = await service.request_password_reset("reset@test.com")
+        assert result["token"] == "known-plaintext-token"
 
         updated_auth = (await session.execute(select(Auth).where(Auth.id == "a1"))).scalar_one()
         stored_hash = updated_auth.request_password_token
@@ -144,7 +144,6 @@ class TestAuthService:
         with pytest.raises(HTTPException) as exc:
             await service.login("user-inactive@test.com", "p")
         assert exc.value.status_code == 401
-        assert "disabled" in exc.value.detail
 
     async def test_should_fail_get_me_if_user_profile_inactive(self, service, session, mocker):
         session.add(Role(id="admin", name="Admin", description="D", active=True))
@@ -269,11 +268,8 @@ class TestAuthService:
 
         with patch.object(service.repo, "find_first_with_user", AsyncMock(return_value={"id": "a", "email": "e@e.com"})):
             with patch.object(service.repo, "update_record_details", AsyncMock()):
-                from src.infra.email.email_provider import email_provider
-
-                with patch.object(email_provider, "send_email", side_effect=Exception("Email error")):
-                    res = await service.request_password_reset("e@e.com")
-                    assert res["message"] == "Recovery email sent successfully"
+                res = await service.request_password_reset("e@e.com")
+                assert res["message"] == "Recovery email sent successfully"
 
     async def test_should_logout_successfully(self, service, mocker):
         from src.infra.redis.redis_provider import redis_provider
@@ -357,7 +353,6 @@ class TestAuthService:
         with pytest.raises(HTTPException) as exc:
             await service.login("locked@test.com", "any")
         assert exc.value.status_code == 401
-        assert "locked" in exc.value.detail
 
         mocker.patch.object(redis_provider, "is_locked", new_callable=AsyncMock, side_effect=Exception("Redis error"))
         mocker.patch.object(service.repo, "find_first_with_user", return_value=None)

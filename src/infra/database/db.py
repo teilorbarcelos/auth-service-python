@@ -1,7 +1,6 @@
 import os
 from contextlib import asynccontextmanager
 
-from sqlalchemy import event
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from src.shared.config.settings import settings
@@ -31,12 +30,6 @@ def _create_engine():
         )
 
     _engine_instance = create_async_engine(settings.database_url, **engine_kwargs)
-
-    from src.infra.metrics.metric_service import metric_service
-
-    @event.listens_for(_engine_instance.sync_engine, "before_cursor_execute")
-    def before_cursor_execute(conn, cursor, statement, parameters, context, execmany):
-        metric_service.increment_counter("db_queries_total")
 
     _async_session_factory = async_sessionmaker(
         bind=_engine_instance,

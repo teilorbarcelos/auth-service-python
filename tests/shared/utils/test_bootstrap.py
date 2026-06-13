@@ -11,8 +11,9 @@ class TestBootstrapUtility:
     async def test_should_populate_features_and_roles(self, session):
         await bootstrap_system()
         features = (await session.execute(select(Feature))).scalars().all()
-        assert len(features) >= 3
-        assert any(f.id == "product" for f in features)
+        assert len(features) == 2
+        assert any(f.id == "user" for f in features)
+        assert any(f.id == "role" for f in features)
 
         roles = (await session.execute(select(Role))).scalars().all()
         assert len(roles) >= 2

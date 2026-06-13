@@ -52,7 +52,7 @@ class TestAuthEndpoints:
 
         response = await client.post("/v1/auth/login", json={"email": f"{uid}@test.com", "password": "password123"})
         assert response.status_code == 401
-        assert response.json()["message"] == "Account is disabled"
+        assert response.json()["message"] == "Invalid credentials"
 
     async def test_should_return_401_if_account_is_locked(self, client: AsyncClient, session):
         uid = str(uuid.uuid4())[:8]
@@ -65,7 +65,7 @@ class TestAuthEndpoints:
 
         response = await client.post("/v1/auth/login", json={"email": f"{uid}@test.com", "password": "password123"})
         assert response.status_code == 401
-        assert response.json()["message"] == "Account locked due to excessive failed attempts"
+        assert response.json()["message"] == "Invalid credentials"
 
     async def test_auth_router_me_missing_header_bypass_auth(self, client: AsyncClient, admin_user_override):
         response = await client.get("/v1/auth/me")
@@ -94,7 +94,7 @@ class TestAuthEndpoints:
     async def test_password_request_endpoint(self, client: AsyncClient):
         from src.modules.auth.auth_service import auth_service
 
-        with patch.object(auth_service, "request_password_reset", return_value={"message": "ok"}) as mock_req:
+        with patch.object(auth_service, "request_password_reset", return_value={"message": "ok", "token": "t"}) as mock_req:
             response = await client.post("/v1/auth/password/request", json={"email": "test@test.com"})
             assert response.status_code == 200
             mock_req.assert_called_once_with("test@test.com")
@@ -115,12 +115,15 @@ class TestAuthEndpoints:
             assert response.status_code == 200
             mock_change.assert_called_once_with("test@test.com", "123", "new")
 
-    async def test_should_logout_endpoint(self, client: AsyncClient):
-        response = await client.post("/v1/auth/logout")
-        assert response.status_code == 200
-        assert response.json()["message"] == messages.LOGGED_OUT_SUCCESSFULLY
+    async def test_should_logout_endpoint(self, client: AsyncClient, admin_user_override):
+        from src.modules.auth.auth_service import auth_service
 
-    async def test_should_logout_with_token(self, client: AsyncClient):
+        with patch.object(auth_service, "logout", return_value={"message": messages.LOGGED_OUT_SUCCESSFULLY}) as mock_logout:
+            response = await client.post("/v1/auth/logout", headers={"Authorization": "Bearer test-token"})
+            assert response.status_code == 200
+            mock_logout.assert_called_once_with("test-token")
+
+    async def test_should_logout_with_token(self, client: AsyncClient, admin_user_override):
         from src.modules.auth.auth_service import auth_service
 
         with patch.object(auth_service, "logout", return_value={"message": messages.LOGGED_OUT_SUCCESSFULLY}) as mock_logout:

@@ -1,7 +1,6 @@
 import os
 
 os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///test.db")
-os.environ.setdefault("MESSAGING_ENABLED", "false")
 
 from unittest.mock import AsyncMock
 
@@ -36,7 +35,6 @@ from httpx import AsyncClient, ASGITransport
 
 from src.infra.database.base import Base
 from src.infra.database.db import get_engine, get_async_session_factory, set_test_session
-from src.infra.messaging.rabbitmq_provider import rabbitmq_provider
 from src.main import app
 from src.shared.middlewares.auth_middleware import check_auth
 
@@ -48,11 +46,6 @@ def admin_user_override():
     app.dependency_overrides[check_auth] = lambda: {"id": "admin-id", "email": "admin@email.com", "roleId": "administrator"}
     yield
     app.dependency_overrides.clear()
-
-
-rabbitmq_provider._connection = AsyncMock()
-rabbitmq_provider._connection.is_closed = False
-rabbitmq_provider._channel = AsyncMock()
 
 
 @pytest_asyncio.fixture(autouse=True)
