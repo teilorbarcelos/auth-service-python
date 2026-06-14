@@ -6,7 +6,6 @@ from contextvars import ContextVar
 
 from fastapi import Request
 
-from src.infra.metrics.metric_service import metric_service
 from src.shared.config.settings import settings
 
 _request_id_ctx: ContextVar[str] = ContextVar("request_id", default="")
@@ -66,9 +65,6 @@ def structured_log(level: str, message: str, **kwargs):
 
 
 async def logging_middleware(request: Request, call_next):
-    if request.url.path == "/metrics":
-        return await call_next(request)
-
     start_time = time.time()
     request_id = str(uuid.uuid4())[:8]
     _request_id_ctx.set(request_id)
@@ -95,20 +91,6 @@ async def logging_middleware(request: Request, call_next):
         status=status,
         duration_ms=round(duration_ms, 2),
         ip=ip,
-    )
-
-    metric_service.increment_counter(
-        "http_requests_total",
-        method=method,
-        status=str(status),
-        path=path,
-    )
-
-    metric_service.record_timer(
-        "http_request_duration_ms",
-        duration_ms,
-        method=method,
-        path=path,
     )
 
     response.headers["X-Request-ID"] = request_id

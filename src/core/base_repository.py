@@ -5,7 +5,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.helpers.repository_helpers import apply_filters, apply_includes, apply_ordering, model_to_dict
 from src.infra.database.base import Base
-from src.modules.audit.audit_context import audit_json_dumps, set_audit_data
 
 T = TypeVar("T", bound=Base)
 
@@ -69,7 +68,6 @@ class BaseRepository(Generic[T]):
             return result.scalar() or 0
 
     async def persist_record(self, data: dict, session: AsyncSession = None) -> dict:
-        set_audit_data(table_name=self.model.__tablename__, diff_value=audit_json_dumps({"action": "create", "data": data}))
         instance = self.model(**data)
         if session:
             session.add(instance)
@@ -83,15 +81,7 @@ class BaseRepository(Generic[T]):
             return model_to_dict(instance)
 
     async def update_record_details(self, id: str, data: dict, session: AsyncSession = None) -> dict | None:
-        set_audit_data(table_name=self.model.__tablename__)
-
         async def _exec(s):
-
-            old_obj = await s.get(self.model, id)
-            if old_obj:
-                old_data = model_to_dict(old_obj)
-                set_audit_data(diff_value=audit_json_dumps({"before": old_data, "after": data}))
-
             stmt = update(self.model).where(self.model.id == id).values(**data)
             await s.execute(stmt)
             if not session:
@@ -154,7 +144,6 @@ class BaseRepository(Generic[T]):
             return await _exec(local_session)
 
     async def persist_many(self, records: list, session: AsyncSession = None):
-        set_audit_data(table_name=self.model.__tablename__, diff_value=audit_json_dumps({"action": "create_many", "count": len(records)}))
         instances = [self.model(**r) for r in records]
         if session:
             session.add_all(instances)

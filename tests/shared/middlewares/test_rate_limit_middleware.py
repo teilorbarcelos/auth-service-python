@@ -79,18 +79,12 @@ class TestRateLimitMiddleware:
         response = await client.get("/health")
         assert response.status_code == 200
 
-    async def test_rate_limit_middleware_exceeded_metric_exception(self, client: AsyncClient):
-        def mock_inc(name, **labels):
-            if name == "exceptions_total":
-                raise Exception("Metric Error")
-            return None
-
+    async def test_rate_limit_middleware_exceeded_returns_429(self, client: AsyncClient):
         with patch("src.shared.middlewares.rate_limit_middleware.redis_provider.client.evalsha", new_callable=AsyncMock) as mock_evalsha:
             mock_evalsha.return_value = [0, 60, 10]
-            with patch("src.infra.metrics.metric_service.metric_service.increment_counter", side_effect=mock_inc):
-                response = await client.get("/v1/auth/me")
-                assert response.status_code == 429
-                assert response.json()["error"] == "Too Many Requests"
+            response = await client.get("/v1/auth/me")
+            assert response.status_code == 429
+            assert response.json()["error"] == "Too Many Requests"
 
     async def test_rate_limit_middleware_script_load_fallback(self):
         request = MagicMock()

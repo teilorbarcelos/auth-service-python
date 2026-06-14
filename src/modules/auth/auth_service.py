@@ -5,10 +5,7 @@ import bcrypt
 from fastapi import HTTPException
 
 from src.infra.auth.auth_provider import auth_provider
-from src.infra.email.email_provider import email_provider
-from src.infra.metrics.metric_service import metric_service
 from src.infra.redis.redis_provider import redis_provider
-from src.modules.audit.audit_events import emit_auth_event
 from src.modules.auth.auth_repository import AuthRepository
 from src.modules.auth.helpers.auth_helpers import format_permissions, format_user_auth_response
 from src.shared.config import messages
@@ -52,27 +49,6 @@ class AuthService:
             "user": format_user_auth_response(user, permissions),
         }
 
-    async def _check_lockout(self, email: str):
-        try:
-            if await redis_provider.is_locked(email):
-                raise HTTPException(status_code=401, detail=messages.ACCOUNT_LOCKED)
-        except HTTPException:
-            raise
-        except Exception:
-            pass
-
-    async def _increment_lockout(self, email: str):
-        try:
-            await redis_provider.increment_lockout(email)
-        except Exception:
-            pass
-
-    async def _reset_lockout(self, email: str):
-        try:
-            await redis_provider.reset_lockout(email)
-        except Exception:
-            pass
-
     async def _bump_session_version(self, user_id: str, auth_id: str):
         from sqlalchemy import update as sa_update
 
@@ -87,40 +63,28 @@ class AuthService:
         await redis_provider.invalidate_permissions(user_id)
 
     async def login(self, email: str, password: str):
-        await self._check_lockout(email)
-
         auth_record = await self.repo.find_first_with_user(email)
 
         if not auth_record or not auth_record.get("user"):
-            metric_service.increment_counter("auth_logins_total", status="failed")
-            await emit_auth_event("login_failed", "unknown", error=messages.INVALID_CREDENTIALS)
             raise HTTPException(status_code=401, detail=messages.INVALID_CREDENTIALS)
 
         if not auth_record.get("active", True):
-            metric_service.increment_counter("auth_logins_total", status="failed")
-            await emit_auth_event("login_failed", auth_record.get("user", {}).get("id", "unknown"), error="Account disabled")
-            raise HTTPException(status_code=401, detail=messages.ACCOUNT_DISABLED)
+            raise HTTPException(status_code=401, detail=messages.INVALID_CREDENTIALS)
 
         if auth_record.get("retries", 0) >= 5:
-            metric_service.increment_counter("auth_logins_total", status="locked")
-            await emit_auth_event("login_locked", auth_record.get("user", {}).get("id", "unknown"), error="Account locked")
-            raise HTTPException(status_code=401, detail=messages.ACCOUNT_LOCKED)
+            raise HTTPException(status_code=401, detail=messages.INVALID_CREDENTIALS)
 
         if not bcrypt.checkpw(password.encode("utf-8"), auth_record.get("password", "").encode("utf-8")):
             new_retries = auth_record.get("retries", 0) + 1
             await self.repo.update_record_details(auth_record["id"], {"retries": new_retries})
-            await self._increment_lockout(email)
             raise HTTPException(status_code=401, detail=messages.INVALID_CREDENTIALS)
 
         user = auth_record["user"]
         if not user.get("active", True):
-            raise HTTPException(status_code=401, detail=messages.ACCOUNT_DISABLED)
+            raise HTTPException(status_code=401, detail=messages.INVALID_CREDENTIALS)
 
         await self.repo.update_record_details(auth_record["id"], {"retries": 0})
-        await self._reset_lockout(email)
 
-        metric_service.increment_counter("auth_logins_total", status="success")
-        await emit_auth_event("login_success", user["id"], user.get("name", ""))
         session_version = auth_record.get("session_version", 1)
         return await self._build_session_for_user(user, session_version)
 
@@ -171,6 +135,11 @@ class AuthService:
             await redis_provider.remove_token_from_session(payload["id"], token)
         return {"message": messages.LOGGED_OUT_SUCCESSFULLY}
 
+    async def logout_user(self, user_id: str):
+        await redis_provider.invalidate_sessions(user_id)
+        await redis_provider.invalidate_permissions(user_id)
+        return {"message": messages.LOGGED_OUT_SUCCESSFULLY}
+
     async def logout_all(self, token: str):
         payload = auth_provider.verify_token(token)
         if payload and payload.get("id"):
@@ -196,15 +165,7 @@ class AuthService:
             },
         )
 
-        user_id = auth_record.get("user", {}).get("id", "unknown")
-        await emit_auth_event("password_reset_requested", user_id)
-
-        try:
-            email_provider.send_email(to=email, subject="Reset Password", body=reset_token)
-        except Exception as e:
-            logger.warning(f"Failed to send password reset email to {email}: {e}")
-
-        return {"message": messages.RECOVERY_EMAIL_SENT}
+        return {"message": messages.RECOVERY_EMAIL_SENT, "token": reset_token}
 
     async def validate_password_reset_token(self, email: str, token: str):
         auth_record = await self.repo.find_first_with_user(email)
@@ -246,7 +207,6 @@ class AuthService:
         )
 
         await self._bump_session_version(user_id, auth_id)
-        await emit_auth_event("password_changed", user_id)
 
         return {"message": messages.PASSWORD_CHANGED_SUCCESSFULLY}
 

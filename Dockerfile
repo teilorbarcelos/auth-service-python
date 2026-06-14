@@ -35,6 +35,6 @@ COPY ./src ./src
 RUN addgroup --system app && adduser --system --group app
 USER app
 
-EXPOSE 8888
+EXPOSE 8001
 
-CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8888", "--workers", "4", "--log-level", "warning"]
+CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8001", "--workers", "4", "--log-level", "warning"]

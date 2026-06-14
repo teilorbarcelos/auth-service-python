@@ -1,5 +1,4 @@
 import datetime
-import json
 import logging
 import os
 
@@ -7,13 +6,11 @@ from fastapi import APIRouter, Response
 from sqlalchemy import text
 
 from src.infra.database.db import get_session
-from src.infra.database.models import ErrorLog
 from src.infra.redis.redis_provider import redis_provider
-from src.shared.config.settings import settings
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/v1/health", tags=["Health"])
+router = APIRouter(tags=["Health"])
 
 START_TIME = datetime.datetime.now()
 
@@ -55,68 +52,23 @@ async def check_redis():
         return {"status": "ERROR", "message": str(e)}
 
 
-from src.infra.messaging.rabbitmq_provider import rabbitmq_provider
-
-
-async def check_rabbitmq():
-    if not settings.messaging_enabled:
-        return {"status": "DISABLED", "message": "Messaging is disabled in settings"}
-    try:
-        if not rabbitmq_provider._connection or rabbitmq_provider._connection.is_closed:
-            await rabbitmq_provider.connect()
-        return {"status": "OK", "message": "Connected"}
-    except Exception as e:
-        return {"status": "ERROR", "message": str(e)}
-
-
-from src.infra.storage.storage_provider import storage_provider
-
-
-async def check_storage():
-    try:
-        test_file = ".health_check_temp"
-        storage_provider.put(test_file, b"health-check")
-
-        if not storage_provider.exists(test_file):
-            raise RuntimeError("Storage write failed: file not found after put")
-
-        storage_provider.delete(test_file)
-        return {"status": "OK", "message": "Writable"}
-    except Exception as e:
-        return {"status": "ERROR", "message": str(e)}
-
-
-@router.get("")
+@router.get("/health")
 async def health_check(response: Response):
     status = "UP"
     db_check = await check_database()
     redis_check = await check_redis()
-    rabbit_check = await check_rabbitmq()
 
-    checks = {"database": db_check, "redis": redis_check, "rabbitmq": rabbit_check, "storage": await check_storage()}
+    checks = {"database": db_check, "redis": redis_check}
 
     for name, check in checks.items():
-        if check["status"] not in ["OK", "DISABLED"]:
+        if check["status"] != "OK":
             status = "DEGRADED"
             logger.warning(f"System Health Degraded: {name} is down", extra={"check": name, "details": check["message"]})
-
-            try:
-                async with get_session() as session:
-                    error_log = ErrorLog(
-                        id_user="SYSTEM",
-                        source="DEGRADED",
-                        error_message=f"System Health Degraded: {name} is down",
-                        error_data=json.dumps({"check": name, "message": check["message"]}),
-                    )
-                    session.add(error_log)
-                    await session.commit()
-            except Exception:
-                pass
 
     data = {
         "status": status,
         "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "deploy": {"timestamp": settings.app_deploy_timestamp, "version": settings.app_version},
+        "deploy": {"timestamp": None, "version": None},
         "uptime": get_uptime(),
         "checks": checks,
         "message": "API is running smoothly. All systems operational.",
@@ -124,3 +76,20 @@ async def health_check(response: Response):
 
     response.status_code = 200 if status == "UP" else 503
     return data
+
+
+@router.get("/liveness")
+async def liveness():
+    return {"status": "ok"}
+
+
+@router.get("/ready")
+async def ready(response: Response):
+    db_check = await check_database()
+    redis_check = await check_redis()
+
+    if db_check["status"] == "OK" and redis_check["status"] == "OK":
+        return {"status": "ready"}
+
+    response.status_code = 503
+    return {"status": "not ready", "database": db_check, "redis": redis_check}

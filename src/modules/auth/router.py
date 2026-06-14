@@ -2,11 +2,13 @@ from fastapi import APIRouter, Depends, Header, HTTPException
 
 from src.modules.auth.auth_service import auth_service
 from src.modules.auth.schemas import (
+    JWKSResponse,
     LoginRequest,
     LoginResponse,
     MessageResponse,
     PasswordChangeRequest,
     PasswordRequestRequest,
+    PasswordRequestResponse,
     PasswordValidateRequest,
     RefreshRequest,
     TokenValidationResponse,
@@ -41,11 +43,11 @@ async def refresh(req: RefreshRequest):
 
 
 @router.post("/logout", response_model=MessageResponse)
-async def logout(authorization: str = Header(None)):
-    if authorization:
-        token = _extract_token(authorization)
-        return await auth_service.logout(token)
-    return {"message": messages.LOGGED_OUT_SUCCESSFULLY}
+async def logout(authorization: str = Header(None), _=Depends(check_auth)):
+    if not authorization:
+        raise HTTPException(status_code=401, detail=messages.INVALID_OR_EXPIRED_TOKEN)
+    token = _extract_token(authorization)
+    return await auth_service.logout(token)
 
 
 @router.post("/logout-all", response_model=MessageResponse)
@@ -56,7 +58,7 @@ async def logout_all(authorization: str = Header(None)):
     return {"message": messages.LOGGED_OUT_SUCCESSFULLY}
 
 
-@router.post("/password/request", response_model=MessageResponse)
+@router.post("/password/request", response_model=PasswordRequestResponse)
 async def request_password(req: PasswordRequestRequest):
     return await auth_service.request_password_reset(req.email)
 
@@ -69,3 +71,8 @@ async def validate_password(req: PasswordValidateRequest):
 @router.post("/password/change", response_model=MessageResponse)
 async def change_password(req: PasswordChangeRequest):
     return await auth_service.change_password(req.email, req.token, req.password)
+
+
+@router.get("/.well-known/jwks.json", response_model=JWKSResponse)
+async def jwks():
+    return JWKSResponse(keys=[])

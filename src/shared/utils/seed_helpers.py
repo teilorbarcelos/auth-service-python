@@ -61,8 +61,9 @@ async def seed_admin(session):
     user_result = await session.execute(user_stmt)
     user = user_result.scalar_one_or_none()
 
+    hashed = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+
     if not user:
-        hashed = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
         auth = Auth(password=hashed, password_algo="bcrypt", password_updated_at=datetime.datetime.now())
         session.add(auth)
         await session.flush()
@@ -71,4 +72,14 @@ async def seed_admin(session):
         session.add(user)
     else:
         user.id_role = "administrator"
+        user.name = "Admin"
         session.add(user)
+
+        auth_stmt = select(Auth).where(Auth.id == user.id_auth)
+        auth_result = await session.execute(auth_stmt)
+        auth = auth_result.scalar_one_or_none()
+        if auth:
+            auth.password = hashed
+            auth.password_algo = "bcrypt"
+            auth.password_updated_at = datetime.datetime.now()
+            session.add(auth)

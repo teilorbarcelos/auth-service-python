@@ -5,7 +5,6 @@ from fastapi import Request
 from fastapi.responses import JSONResponse
 
 from src.infra.auth.auth_provider import auth_provider
-from src.infra.metrics.metric_service import metric_service
 from src.infra.redis.redis_provider import redis_provider
 from src.shared.config.settings import settings
 
@@ -34,7 +33,7 @@ redis.call('EXPIRE', KEYS[1], window)
 return {1, count + 1, max_req - count - 1}
 """
 
-BYPASS_PATHS = {"/v1/docs", "/v1/swagger.json", "/health", "/liveness", "/metrics"}
+BYPASS_PATHS = {"/v1/docs", "/v1/swagger.json", "/health", "/liveness", "/ready"}
 
 RATE_LIMIT_SHA = None
 
@@ -72,10 +71,6 @@ def _build_rate_limit_keys(ip: str, path: str, user_id: str | None) -> list[str]
 
 
 def _rate_limit_exceeded_response(limit: int, window: int, extra: int) -> JSONResponse:
-    try:
-        metric_service.increment_counter("exceptions_total", type="HTTPException", status="429")
-    except Exception:
-        pass
     return JSONResponse(
         status_code=429,
         content={
